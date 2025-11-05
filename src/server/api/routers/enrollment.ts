@@ -51,7 +51,7 @@ export const enrollmentRouter = createTRPCRouter({
       });
 
       if (!coachProfile) {
-        throw new Error("Not authorized");
+        throw new Error("Coach profile not found");
       }
 
       const program = await ctx.db.program.findUnique({
@@ -59,7 +59,7 @@ export const enrollmentRouter = createTRPCRouter({
       });
 
       if (!program || program.coachId !== coachProfile.id) {
-        throw new Error("Not authorized");
+        throw new Error("Program not found or access denied");
       }
 
       return ctx.db.enrollment.findMany({
@@ -160,7 +160,7 @@ export const enrollmentRouter = createTRPCRouter({
       });
 
       if (!clientProfile) {
-        throw new Error("Not authorized");
+        throw new Error("Client profile not found");
       }
 
       const enrollment = await ctx.db.enrollment.findUnique({
@@ -168,7 +168,7 @@ export const enrollmentRouter = createTRPCRouter({
       });
 
       if (!enrollment || enrollment.clientId !== clientProfile.id) {
-        throw new Error("Not authorized");
+        throw new Error("Enrollment not found or access denied");
       }
 
       return ctx.db.enrollment.update({

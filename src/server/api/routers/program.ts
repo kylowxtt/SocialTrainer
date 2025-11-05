@@ -149,7 +149,7 @@ export const programRouter = createTRPCRouter({
       });
 
       if (!coachProfile) {
-        throw new Error("Not authorized");
+        throw new Error("Coach profile not found");
       }
 
       const program = await ctx.db.program.findUnique({
@@ -157,7 +157,7 @@ export const programRouter = createTRPCRouter({
       });
 
       if (!program || program.coachId !== coachProfile.id) {
-        throw new Error("Not authorized");
+        throw new Error("Program not found or access denied");
       }
 
       return ctx.db.program.update({
@@ -176,7 +176,7 @@ export const programRouter = createTRPCRouter({
       });
 
       if (!coachProfile) {
-        throw new Error("Not authorized");
+        throw new Error("Coach profile not found");
       }
 
       const program = await ctx.db.program.findUnique({
@@ -184,7 +184,7 @@ export const programRouter = createTRPCRouter({
       });
 
       if (!program || program.coachId !== coachProfile.id) {
-        throw new Error("Not authorized");
+        throw new Error("Program not found or access denied");
       }
 
       return ctx.db.program.delete({
