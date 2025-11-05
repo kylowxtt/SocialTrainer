@@ -116,7 +116,7 @@ export default async function Home() {
                 Everything You Need to Scale
               </h2>
               <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-                From program creation to client management, we've got you covered
+                From program creation to client management, we&apos;ve got you covered
               </p>
             </div>
             <div className="grid gap-8 md:grid-cols-3">
@@ -273,7 +273,7 @@ export default async function Home() {
                 Ready to Transform Your Coaching Business?
               </h2>
               <p className="mb-8 text-lg text-muted-foreground">
-                Join hundreds of coaches who've simplified their workflow and scaled their impact
+                Join hundreds of coaches who&apos;ve simplified their workflow and scaled their impact
               </p>
               <Button size="lg" asChild>
                 <Link href={session ? "/dashboard" : "/api/auth/signin"}>

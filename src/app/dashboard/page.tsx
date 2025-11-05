@@ -270,7 +270,7 @@ export default async function DashboardPage() {
                 </div>
                 <CardTitle className="text-2xl">Get Started</CardTitle>
                 <CardDescription className="text-base">
-                  You haven't created any programs or enrolled in any yet.
+                  You haven&apos;t created any programs or enrolled in any yet.
                   Start your journey today!
                 </CardDescription>
               </CardHeader>

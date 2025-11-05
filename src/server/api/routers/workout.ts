@@ -147,14 +147,12 @@ export const workoutRouter = createTRPCRouter({
         where: { userId: ctx.session.user.id },
       });
 
-      if (!clientProfile) {
-        clientProfile = await ctx.db.clientProfile.create({
-          data: {
-            userId: ctx.session.user.id,
-            goals: [],
-          },
-        });
-      }
+      clientProfile ??= await ctx.db.clientProfile.create({
+        data: {
+          userId: ctx.session.user.id,
+          goals: [],
+        },
+      });
 
       return ctx.db.workoutLog.create({
         data: {
