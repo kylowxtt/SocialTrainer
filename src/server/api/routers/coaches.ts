@@ -52,25 +52,30 @@ export const coachRouter = createTRPCRouter({
             tiktok: z.string().optional(),
             youtube: z.string().optional(),
         }).optional(),
-        intakeFormSchema: intakeFormSchemaInput.optional(),
     })).mutation(async ({ ctx, input }) => {
-        const { intakeFormSchema, ...updateData } = input;
-
         const coachProfile = await db.coachProfile.update({
             where: { userId: ctx.session.user.id },
-            data: {
-                ...updateData,
-                ...(intakeFormSchema !== undefined
-                    ? {
-                        intakeFormSchema: intakeFormSchema as Prisma.InputJsonValue,
-                        intakeFormSchemaId: intakeFormSchema.schemaId ?? null,
-                        intakeFormSchemaVersion: intakeFormSchema.version ?? null,
-                    }
-                    : {}),
-            } satisfies Prisma.CoachProfileUncheckedUpdateInput,
+            data: input as Prisma.CoachProfileUncheckedUpdateInput,
         });
         return coachProfile;
     }),
+    getIntakeFormSchema: protectedProcedure.query(async ({ ctx }) => {
+        const coachProfile = await db.coachProfile.findFirst({
+            where: { userId: ctx.session.user.id },
+            orderBy: [{ intakeFormSchemaVersion: "desc" }],
+            select: { intakeFormSchema: true },
+        });
+        return coachProfile?.intakeFormSchema as Prisma.InputJsonValue;
+    }),
+    publishIntakeFormSchema: protectedProcedure.input(z.object({
+        schema: intakeFormSchemaInput,
+    })).mutation(async ({ ctx, input }) => {
+        const coachProfile = await db.coachProfile.update({
+            where: { userId: ctx.session.user.id },
+            data: { intakeFormSchema: input.schema as Prisma.InputJsonValue },
+        });
+        return coachProfile;
+    }),    
 });
 
 export type CoachRouter = typeof coachRouter;

@@ -90,8 +90,6 @@ model Lead {
   updatedAt  DateTime  @updatedAt
   reviewedAt DateTime?
   acceptedAt DateTime?
-
-  // Coach/Lead communication history, etc, could be modeled as messages in a separate model
 }
 
 enum LeadStatus {
@@ -121,11 +119,14 @@ model CoachProfile {
   intakeFormSchemaVersion Int?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
-
+  
+  publicSlug  String? @unique
+  headline    String?
+  heroImage   String? // URL
   programs Program[]
   products Product[]
   orders   Order[]
-  // Leads expressing interest in this coach
+
   leads    Lead[]
 }
 
