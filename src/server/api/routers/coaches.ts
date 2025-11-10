@@ -15,7 +15,14 @@ export const coachRouter = createTRPCRouter({
         });
         return coachProfile;
     }),
-
+    getCoachProfileBySlug: publicProcedure.input(z.object({
+        slug: z.string(),
+    })).query(async ({ input }) => {
+        const coachProfile = await db.coachProfile.findUnique({
+            where: { publicSlug: input.slug },
+        });
+        return coachProfile;
+    }),
     createCoachProfile: protectedProcedure.input(z.object({
         bio: z.string(),
         specialties: z.array(z.string()),

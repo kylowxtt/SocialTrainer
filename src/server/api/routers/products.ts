@@ -12,6 +12,14 @@ export const productsRouter = createTRPCRouter({
         });
         return products;
     }),
+    getProductsByCoachSlug: publicProcedure.input(z.object({
+        slug: z.string(),
+    })).query(async ({ input }) => {
+        const products = await db.product.findMany({
+            where: { coach: { publicSlug: input.slug }, isActive: true },
+        });
+        return products;
+    }),
     getProduct: protectedProcedure.input(z.object({
         id: z.string(),
     })).query(async ({ ctx, input }) => {
@@ -58,6 +66,25 @@ export const productsRouter = createTRPCRouter({
     })).mutation(async ({ ctx, input }) => {
         const product = await db.product.delete({
             where: { id: input.id, coachId: ctx.session.user.id },
+        });
+        return product;
+    }),
+    archiveProduct: protectedProcedure.input(z.object({
+        id: z.string(),
+    })).mutation(async ({ ctx, input }) => {
+        const product = await db.product.update({
+            where: { id: input.id, coachId: ctx.session.user.id },
+            data: { isActive: false },
+        });
+        return product;
+    }),
+
+    unarchiveProduct: protectedProcedure.input(z.object({
+        id: z.string(),
+    })).mutation(async ({ ctx, input }) => {
+        const product = await db.product.update({
+            where: { id: input.id, coachId: ctx.session.user.id },
+            data: { isActive: true },
         });
         return product;
     }),
