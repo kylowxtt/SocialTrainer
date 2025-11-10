@@ -1,7 +1,5 @@
-// User routes
-
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../api/trpc";
-import { db } from "../db";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
+import { db } from "../../db";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -40,7 +38,7 @@ export const userRouter = createTRPCRouter({
                 socialMediaLinks: input.socialMediaLinks,
             },
         });
-        return { success: true, coachProfile: coachProfile };
+        return coachProfile;
     }),
 
     becomeClient: protectedProcedure.input(z.object({
@@ -71,8 +69,9 @@ export const userRouter = createTRPCRouter({
                 customFields: input.customFields,   
             },
         });
-        return { success: true, clientProfile: clientProfile };
+        return clientProfile;
     }),
+
 });
 
 export type UserRouter = typeof userRouter;
