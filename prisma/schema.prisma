@@ -73,6 +73,8 @@ model CoachProfile {
     bio              String?
     specialties      String[] // e.g., ["Weight Loss", "Muscle Building"]
     socialMediaLinks Json?    // Store Instagram, TikTok, YouTube links
+    // JSON schema describing the intake form fields a client should fill
+    intakeFormSchema Json?
     createdAt        DateTime @default(now())
     updatedAt        DateTime @updatedAt
     
@@ -83,7 +85,15 @@ model ClientProfile {
     id          String       @id @default(cuid())
     userId      String       @unique
     user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-    goals       String[]     // e.g., ["Lose weight", "Build muscle"]
+    // Required basic contact info
+    name        String
+    email       String
+    // Optional additional contact options
+    phone       String?
+    // Coach-defined dynamic fields captured from custom intake form
+    customFields Json?
+    // High-level goals
+    goals       String[]     @default([]) // e.g., ["Lose weight", "Build muscle"]
     createdAt   DateTime     @default(now())
     updatedAt   DateTime     @updatedAt
     

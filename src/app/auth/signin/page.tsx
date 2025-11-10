@@ -3,7 +3,15 @@
   import type { ComponentType } from "react";
   import { useState } from "react";
 
-  import { Loader2, ArrowLeft, CheckCircle2, Lock } from "lucide-react";
+  import {
+    Loader2,
+    ArrowLeft,
+    CheckCircle2,
+    Lock,
+    ShieldCheck,
+    Sparkles,
+    Zap,
+  } from "lucide-react";
   import { signIn } from "next-auth/react";
   import Link from "next/link";
 
@@ -57,6 +65,24 @@
     },
   ];
 
+  const WHY_DISCORD_FEATURES = [
+    {
+      title: "Automated access control",
+      description: "Sync premium roles, upgrade clients instantly, and never double-handle permissions.",
+      icon: ShieldCheck,
+    },
+    {
+      title: "Launch drops that convert",
+      description: "Trigger channel announcements and DMs at the exact moment workouts go live.",
+      icon: Zap,
+    },
+    {
+      title: "Keep the vibe on-brand",
+      description: "Layer custom emoji, welcome flows, and templates that match your coaching identity.",
+      icon: Sparkles,
+    },
+  ];
+
   export default function SignInPage() {
     const [pendingProvider, setPendingProvider] = useState<string | null>(null);
 
@@ -72,29 +98,31 @@
     };
 
     return (
-      <div className="space-y-12">
+    <div className="flex flex-col gap-12">
+      <header className="space-y-8">
+        <Button variant="ghost" className="group gap-2 self-start text-white/70 hover:text-white" asChild>
+          <Link href="/">
+            <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+            Back to site
+          </Link>
+        </Button>
+
         <div className="space-y-6">
-          <Button variant="ghost" className="group gap-2 text-white/70 hover:text-white" asChild>
-            <Link href="/">
-              <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-              Back to site
-            </Link>
-          </Button>
-          <div className="space-y-4">
-            <span className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-5 py-1.5 text-xs font-semibold uppercase tracking-wide text-purple-200">
-              <SparklesPulse className="h-3 w-3" />
-              Social-first workflows
-            </span>
-            <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Sign in to your coaching HQ
-            </h1>
-            <p className="text-base text-gray-300">
-              Unlock the dashboard to build programs, automate onboarding, and track your clients in real time.
+          <span className="inline-flex items-center gap-2 self-start rounded-full border border-purple-500/40 bg-purple-500/10 px-5 py-1.5 text-xs font-semibold uppercase tracking-wide text-purple-200">
+            <SparklesPulse className="h-3 w-3" />
+            Social-first workflows
+          </span>
+          <div className="space-y-3">
+            <h1 className="text-4xl font-black leading-tight text-white sm:text-5xl">Sign in to your coaching HQ</h1>
+            <p className="max-w-lg text-base text-gray-300">
+              Unlock the dashboard to build programs, automate onboarding, and track your clients in real time. Continue with Discord to keep everything your community loves in one place.
             </p>
           </div>
         </div>
+      </header>
 
-        <div className="space-y-6">
+      <section className="space-y-4">
+        <div className="space-y-4">
           {AUTH_METHODS.map((method) => (
             <AuthMethodButton
               key={method.id}
@@ -104,21 +132,42 @@
             />
           ))}
         </div>
+        <p className="text-xs text-gray-500">
+          By continuing you agree to our
+          {" "}
+          <Link href="/legal/terms" className="text-purple-200 transition hover:text-purple-100">
+            Terms
+          </Link>
+          {" "}
+          and
+          {" "}
+          <Link href="/legal/privacy" className="text-purple-200 transition hover:text-purple-100">
+            Privacy Policy
+          </Link>
+          .
+        </p>
+      </section>
 
-        <Separator className="border-white/10" />
+      <Separator className="border-white/10" />
 
-        <div className="space-y-5 border-t border-white/10 pt-6 text-sm text-gray-400">
-          <p className="text-xs uppercase tracking-wide text-gray-500">Why Discord?</p>
-          <ul className="space-y-3">
-            {["Automated role syncing for client tiers", "Direct DM reminders when workouts drop", "Private channel access for premium programs"].map((reason) => (
-              <li key={reason} className="flex items-start gap-3 text-gray-300">
-                <span className="mt-1 inline-flex h-1.5 w-1.5 flex-shrink-0 rounded-full bg-purple-400" />
-                {reason}
-              </li>
-            ))}
-          </ul>
+      <section className="space-y-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Why Discord powers SocialTrainer</p>
+        <div className="grid gap-4 lg:grid-cols-3">
+          {WHY_DISCORD_FEATURES.map((feature) => (
+            <div
+              key={feature.title}
+              className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.06] p-5 shadow-lg shadow-purple-950/10"
+            >
+              <feature.icon className="h-5 w-5 text-purple-200" />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-white">{feature.title}</p>
+                <p className="text-sm text-gray-400">{feature.description}</p>
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
+      </section>
+    </div>
     );
   }
 
@@ -137,38 +186,40 @@
         onClick={onSignIn}
         disabled={!method.available || pendingProvider === method.id}
         className={cn(
-          "group relative flex w-full items-center justify-between gap-6 rounded-2xl border border-white/10 bg-white/5 px-7 py-6 text-left transition duration-200 hover:border-white/20 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500",
-          method.available ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+          "group relative flex w-full items-center justify-between gap-6 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/5 via-white/0 to-white/10 px-8 py-7 text-left transition duration-200",
+          method.available
+            ? "cursor-pointer hover:border-white/20 hover:from-white/10 hover:to-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/80"
+            : "cursor-not-allowed opacity-60",
         )}
       >
         <div className="flex items-center gap-5">
           <div
             className={cn(
-              "flex h-12 w-12 items-center justify-center rounded-xl text-white shadow-lg shadow-purple-500/30",
+              "flex aspect-square h-14 w-14 items-center justify-center rounded-2xl text-white shadow-lg shadow-purple-800/30",
               "bg-gradient-to-br",
               method.gradient,
             )}
           >
-          <Icon className="h-6 w-6 shrink-0" />
+            <Icon className="h-7 w-7 shrink-0" />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-lg font-semibold text-white">{method.label}</p>
+            <p className="text-sm text-gray-400">{method.description}</p>
+          </div>
         </div>
-        <div className="space-y-1.5">
-          <p className="text-lg font-semibold text-white">{method.label}</p>
-          <p className="text-sm text-gray-400">{method.description}</p>
-        </div>
-      </div>
-      <div className="flex items-center gap-3 text-sm text-purple-200">
-        {method.available ? (
-          pendingProvider === method.id ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
+        <div className="flex items-center gap-3 text-sm text-purple-100">
+          {method.available ? (
+            pendingProvider === method.id ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <CheckCircle2 className="h-5 w-5 text-purple-200 opacity-70 transition group-hover:opacity-100" />
+            )
           ) : (
-            <CheckCircle2 className="h-5 w-5 text-purple-300 opacity-70 transition group-hover:opacity-100" />
-          )
-        ) : (
-          <span>{method.comingSoonCopy ?? "Not available"}</span>
-        )}
-      </div>
-    </button>
-  );
+            <span className="text-purple-200/70">{method.comingSoonCopy ?? "Not available"}</span>
+          )}
+        </div>
+      </button>
+    );
 }
 
 type SparklesPulseProps = {
