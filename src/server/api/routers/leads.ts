@@ -4,11 +4,12 @@ import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { db } from "../../db";
 import { z } from "zod";
 import type { Prisma } from "../../../../generated/prisma";
+import { TRPCError } from "@trpc/server";
 
 export const leadsRouter = createTRPCRouter({
 	// Core contact info is captured as explicit columns on Lead.
 	// Additional coach-defined intake answers are stored as JSON custom fields.
-	createLead: protectedProcedure.input(z.object({
+	createLeadForCoach: publicProcedure.input(z.object({
 		name: z.string(),
 		email: z.string().email(),
 		phone: z.string().optional(),
@@ -17,6 +18,19 @@ export const leadsRouter = createTRPCRouter({
 		intakeSchemaVersion: z.number().int().positive().optional(),
 		customFields: z.record(z.string(), z.any()).optional(),
 	})).mutation(async ({ input }) => {
+        const existingLead = await db.lead.findFirst({
+            where: { 
+                email: input.email,
+                coachId: input.coachId,
+            },
+            include: {
+                coach: true,
+                clientProfile: true,
+            },
+        });
+        if (existingLead) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Lead already exists for this coach" });
+        }
 		const leadData: Prisma.LeadUncheckedCreateInput = {
 			name: input.name,
 			email: input.email,
