@@ -46,13 +46,12 @@ export const userRouter = createTRPCRouter({
     }),
 
     becomeClient: protectedProcedure.input(z.object({
-        // We collect client information and coach-defined customFields (flexible structure)
+        // We collect basic client information
         contactInfo: z.object({
             name: z.string(),
             email: z.string().email(),
             phone: z.string().optional(),
         }),
-        customFields: z.record(z.string(), z.any()).optional(), // dynamic fields defined by coach
     })).mutation(async ({ ctx, input }) => {
         const user = await db.user.findUnique({
             where: { id: ctx.session.user.id },
@@ -74,7 +73,6 @@ export const userRouter = createTRPCRouter({
                 name: input.contactInfo.name,
                 email: input.contactInfo.email,
                 phone: input.contactInfo.phone,
-                customFields: input.customFields,   
             },
         });
         return clientProfile;

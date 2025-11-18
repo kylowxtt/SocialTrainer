@@ -130,10 +130,8 @@ export const leadsRouter = createTRPCRouter({
         if (lead.coach.userId !== ctx.session.user.id) {
             throw new TRPCError({ code: "FORBIDDEN", message: "You can only convert your own leads" });
         }
-        const updatedLead = await db.lead.update({
-            where: { id: input.id },
-            data: { status: "CONVERTED" },
-        });
+        
+        // Create user first
         const user = await db.user.create({
             data: {
                 email: lead.email,
@@ -141,18 +139,37 @@ export const leadsRouter = createTRPCRouter({
             },  
         });
 
-		const customFields = (updatedLead.intakeSubmission ?? {}) as unknown as Record<string, unknown>;
-
+        // Create client profile WITHOUT customFields
 		const clientProfile = await db.clientProfile.create({
 			data: {
 				userId: user.id,
-				name: updatedLead.name,
-				email: updatedLead.email,
-				phone: updatedLead.phone ?? undefined,
-				customFields: customFields as unknown as Prisma.InputJsonValue,
+				name: lead.name,
+				email: lead.email,
+				phone: lead.phone ?? undefined,
 			},
 		});
-		return clientProfile;
+
+        // Create coaching relationship with intake form data
+        const coachingRelationship = await db.coachingRelationship.create({
+            data: {
+                coachId: lead.coachId,
+                clientId: clientProfile.id,
+                intakeSubmission: lead.intakeSubmission as Prisma.InputJsonValue ?? null,
+                intakeSchemaId: lead.intakeSchemaId,
+                intakeSchemaVersion: lead.intakeSchemaVersion,
+            },
+        });
+
+        // Update lead to mark as converted and link to coaching relationship
+        const updatedLead = await db.lead.update({
+            where: { id: input.id },
+            data: { 
+                status: "CONVERTED",
+                coachingRelationshipId: coachingRelationship.id,
+            },
+        });
+
+		return { clientProfile, coachingRelationship };
     }),
 
 
