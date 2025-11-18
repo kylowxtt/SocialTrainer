@@ -22,9 +22,13 @@ export const userRouter = createTRPCRouter({
     })).mutation(async ({ ctx, input }) => {
         const user = await db.user.findUnique({
             where: { id: ctx.session.user.id },
+            include: { coachProfile: true },
         });
         if (!user) {
             throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+        }
+        if (user.coachProfile) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "User already has a coach profile" });
         }
         await db.user.update({
             where: { id: ctx.session.user.id },
@@ -52,9 +56,13 @@ export const userRouter = createTRPCRouter({
     })).mutation(async ({ ctx, input }) => {
         const user = await db.user.findUnique({
             where: { id: ctx.session.user.id },
+            include: { clientProfile: true },
         });
         if (!user) {
             throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+        }
+        if (user.clientProfile) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "User already has a client profile" });
         }
         await db.user.update({
             where: { id: ctx.session.user.id },

@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure, coachProcedure } from "../trpc";
 import { db } from "../../db";
 import type { Prisma } from "../../../../generated/prisma";
+import { TRPCError } from "@trpc/server";
 
 const intakeFormSchemaInput = z.object({
     schemaId: z.string().min(1),
@@ -9,10 +10,13 @@ const intakeFormSchemaInput = z.object({
 }).passthrough();
 
 export const coachRouter = createTRPCRouter({
-    getCoachProfile: protectedProcedure.query(async ({ ctx }) => {
+    getCoachProfile: coachProcedure.query(async ({ ctx }) => {
         const coachProfile = await db.coachProfile.findUnique({
             where: { userId: ctx.session.user.id },
         });
+        if (!coachProfile) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Coach profile not found" });
+        }
         return coachProfile;
     }),
     getCoachProfileBySlug: publicProcedure.input(z.object({
@@ -33,6 +37,14 @@ export const coachRouter = createTRPCRouter({
         }),
         intakeFormSchema: intakeFormSchemaInput.optional(),
     })).mutation(async ({ ctx, input }) => {
+        // Check if profile already exists
+        const existing = await db.coachProfile.findUnique({
+            where: { userId: ctx.session.user.id },
+        });
+        if (existing) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Coach profile already exists" });
+        }
+
         const { intakeFormSchema, ...profileData } = input;
 
         const data: Prisma.CoachProfileUncheckedCreateInput = {
@@ -51,7 +63,7 @@ export const coachRouter = createTRPCRouter({
         return coachProfile;
     }),
 
-    updateCoachProfile: protectedProcedure.input(z.object({
+    updateCoachProfile: coachProcedure.input(z.object({
         bio: z.string().optional(),
         specialties: z.array(z.string()).optional(),
         socialMediaLinks: z.object({
@@ -66,7 +78,7 @@ export const coachRouter = createTRPCRouter({
         });
         return coachProfile;
     }),
-    getIntakeFormSchema: protectedProcedure.query(async ({ ctx }) => {
+    getIntakeFormSchema: coachProcedure.query(async ({ ctx }) => {
         const coachProfile = await db.coachProfile.findFirst({
             where: { userId: ctx.session.user.id },
             orderBy: [{ intakeFormSchemaVersion: "desc" }],
@@ -74,7 +86,7 @@ export const coachRouter = createTRPCRouter({
         });
         return coachProfile?.intakeFormSchema as Prisma.InputJsonValue;
     }),
-    publishIntakeFormSchema: protectedProcedure.input(z.object({
+    publishIntakeFormSchema: coachProcedure.input(z.object({
         schema: intakeFormSchemaInput,
     })).mutation(async ({ ctx, input }) => {
         const coachProfile = await db.coachProfile.update({

@@ -1,6 +1,6 @@
 // Leads router
 
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure, coachProcedure } from "../trpc";
 import { db } from "../../db";
 import { z } from "zod";
 import type { Prisma } from "../../../../generated/prisma";
@@ -46,43 +46,91 @@ export const leadsRouter = createTRPCRouter({
         });
         return lead;
     }),
-	getLeads: protectedProcedure.query(async ({ ctx }) => {
+	getLeads: coachProcedure.query(async ({ ctx }) => {
+        // Get coach profile to verify ownership
+        const coachProfile = await db.coachProfile.findUnique({
+            where: { userId: ctx.session.user.id },
+        });
+        if (!coachProfile) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Coach profile not found" });
+        }
         const leads = await db.lead.findMany({
-            where: { coachId: ctx.session.user.id },
+            where: { coachId: coachProfile.id },
         });
         return leads;
     }),
-    getLead: protectedProcedure.input(z.object({
+    getLead: coachProcedure.input(z.object({
         id: z.string(),
-	})).query(async ({ input }) => {
+	})).query(async ({ ctx, input }) => {
         const lead = await db.lead.findUnique({
             where: { id: input.id },
+            include: { coach: true },
         });
+        if (!lead) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
+        }
+        // Verify ownership - coach can only view their own leads
+        if (lead.coach.userId !== ctx.session.user.id) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "You can only view your own leads" });
+        }
         return lead;
     }),
 
-    deleteLead: protectedProcedure.input(z.object({
+    deleteLead: coachProcedure.input(z.object({
         id: z.string(),
-	})).mutation(async ({ input }) => {
-        const lead = await db.lead.delete({
+	})).mutation(async ({ ctx, input }) => {
+        const lead = await db.lead.findUnique({
+            where: { id: input.id },
+            include: { coach: true },
+        });
+        if (!lead) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
+        }
+        // Verify ownership
+        if (lead.coach.userId !== ctx.session.user.id) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "You can only delete your own leads" });
+        }
+        const deletedLead = await db.lead.delete({
             where: { id: input.id },
         });
-        return lead;
+        return deletedLead;
     }),
-    updateLeadStatus: protectedProcedure.input(z.object({
+    updateLeadStatus: coachProcedure.input(z.object({
         id: z.string(),
         status: z.enum(["PENDING", "REVIEWED", "ACCEPTED", "REJECTED", "CONVERTED"]),
-	})).mutation(async ({ input }) => {
-        const lead = await db.lead.update({
+	})).mutation(async ({ ctx, input }) => {
+        const lead = await db.lead.findUnique({
+            where: { id: input.id },
+            include: { coach: true },
+        });
+        if (!lead) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
+        }
+        // Verify ownership
+        if (lead.coach.userId !== ctx.session.user.id) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "You can only update your own leads" });
+        }
+        const updatedLead = await db.lead.update({
             where: { id: input.id },
             data: { status: input.status },
         });
-        return lead;
+        return updatedLead;
     }),
-    convertLeadToClientProfile: protectedProcedure.input(z.object({
+    convertLeadToClientProfile: coachProcedure.input(z.object({
         id: z.string(),
-	})).mutation(async ({ input }) => {
-        const lead = await db.lead.update({
+	})).mutation(async ({ ctx, input }) => {
+        const lead = await db.lead.findUnique({
+            where: { id: input.id },
+            include: { coach: true },
+        });
+        if (!lead) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
+        }
+        // Verify ownership
+        if (lead.coach.userId !== ctx.session.user.id) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "You can only convert your own leads" });
+        }
+        const updatedLead = await db.lead.update({
             where: { id: input.id },
             data: { status: "CONVERTED" },
         });
@@ -93,14 +141,14 @@ export const leadsRouter = createTRPCRouter({
             },  
         });
 
-		const customFields = (lead.intakeSubmission ?? {}) as unknown as Record<string, unknown>;
+		const customFields = (updatedLead.intakeSubmission ?? {}) as unknown as Record<string, unknown>;
 
 		const clientProfile = await db.clientProfile.create({
 			data: {
 				userId: user.id,
-				name: lead.name,
-				email: lead.email,
-				phone: lead.phone ?? undefined,
+				name: updatedLead.name,
+				email: updatedLead.email,
+				phone: updatedLead.phone ?? undefined,
 				customFields: customFields as unknown as Prisma.InputJsonValue,
 			},
 		});
