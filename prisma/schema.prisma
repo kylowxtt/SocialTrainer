@@ -84,6 +84,8 @@ model Lead {
   clientProfileId     String?        @unique
   clientProfile       ClientProfile? @relation(name: "LeadToClientProfile", fields: [clientProfileId], references: [id], onDelete: SetNull)
   orders              Order[]
+  coachingRelationshipId String? @unique
+  coachingRelationship CoachingRelationship? @relation("LeadToCoachingRelationship", fields: [coachingRelationshipId], references: [id], onDelete: SetNull)
 
   // Time tracking
   createdAt  DateTime  @default(now())
@@ -128,6 +130,7 @@ model CoachProfile {
   orders   Order[]
 
   leads    Lead[]
+  coachingRelationships CoachingRelationship[]
 }
 
 model ClientProfile {
@@ -139,19 +142,18 @@ model ClientProfile {
   email        String
   // Optional additional contact options
   phone        String?
-  // Coach-defined dynamic fields captured from custom intake form
-  customFields Json?
   // High-level goals
   goals        String[] @default([]) // e.g., ["Lose weight", "Build muscle"]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   enrollments Enrollment[]
-  workoutLogs WorkoutLog[]
   orders      Order[]
 
   // Optional provenance — a client profile can originate from at most one lead
   originLead Lead? @relation(name: "LeadToClientProfile")
+  
+  coachingRelationships CoachingRelationship[]
 }
 
 model Program {
@@ -168,7 +170,6 @@ model Program {
   updatedAt   DateTime     @updatedAt
 
   enrollments Enrollment[]
-  workouts    Workout[]
 
   @@index([coachId])
 }
@@ -257,37 +258,35 @@ model Order {
   @@index([status])
 }
 
-model Workout {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  programId   String
-  program     Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
-  weekNumber  Int // Which week of the program
-  dayNumber   Int // Which day of the week
-  exercises   Json // Array of exercises with sets, reps, etc.
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  workoutLogs WorkoutLog[]
-
-  @@index([programId])
+enum CoachingRelationshipStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  PAUSED
 }
 
-model WorkoutLog {
-  id          String        @id @default(cuid())
-  clientId    String
-  client      ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  workoutId   String
-  workout     Workout       @relation(fields: [workoutId], references: [id], onDelete: Cascade)
-  completed   Boolean       @default(false)
-  notes       String?
-  performance Json? // Actual weights, reps performed, etc.
-  date        DateTime      @default(now())
-  createdAt   DateTime      @default(now())
+model CoachingRelationship {
+  id                    String                        @id @default(cuid())
+  coachId               String
+  coach                 CoachProfile                  @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  clientId              String
+  client                ClientProfile                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  status                CoachingRelationshipStatus    @default(ACTIVE)
+  // Intake form data from lead conversion
+  intakeSubmission      Json?
+  intakeSchemaId        String?
+  intakeSchemaVersion   Int?
+  startDate             DateTime                      @default(now())
+  endDate               DateTime?
+  createdAt             DateTime                      @default(now())
+  updatedAt             DateTime                      @updatedAt
 
+  // Optional link back to the lead that created this relationship
+  originLead Lead? @relation("LeadToCoachingRelationship")
+
+  @@unique([coachId, clientId])
+  @@index([coachId])
   @@index([clientId])
-  @@index([workoutId])
 }
 
 model VerificationToken {
