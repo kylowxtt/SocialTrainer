@@ -5,11 +5,19 @@ import { db } from "../../db";
 import { z } from "zod";
 import type { Prisma, ProductType } from "../../../../generated/prisma";
 import { TRPCError } from "@trpc/server";
+import { syncProductToStripe } from "../../stripe/sync";
+import { SUPPORTED_CURRENCIES } from "../../stripe/client";
 
 export const programsRouter = createTRPCRouter({
     getPrograms: coachProcedure.query(async ({ ctx }) => {
+        const coachProfile = await db.coachProfile.findUnique({
+            where: { userId: ctx.session.user.id },
+        });
+        if (!coachProfile) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Coach profile not found" });
+        }
         const programs = await db.program.findMany({
-            where: { coachId: ctx.session.user.id },
+            where: { coachId: coachProfile.id },
         });
         return programs;
     }),
@@ -34,7 +42,10 @@ export const programsRouter = createTRPCRouter({
         price: z.number(),
         duration: z.number(),
         maxClients: z.number().optional(),
-        currency: z.string().default("USD"),
+        currency: z.string().refine(
+            (val) => SUPPORTED_CURRENCIES.includes(val.toLowerCase() as any),
+            { message: `Unsupported currency. Supported currencies: ${SUPPORTED_CURRENCIES.join(", ")}` }
+        ).default("USD"),
     })).mutation(async ({ ctx, input }) => {    
         const coachProfile = await db.coachProfile.findUnique({
             where: { userId: ctx.session.user.id },
@@ -58,6 +69,25 @@ export const programsRouter = createTRPCRouter({
                 },
             });
             
+            // Sync product with Stripe
+            const { stripeProductId, stripePriceId } = await syncProductToStripe(
+                product.id,
+                product.name,
+                product.description,
+                product.priceCents,
+                product.currency,
+                product.type,
+            );
+            
+            // Update product with Stripe IDs
+            const updatedProduct = await tx.product.update({
+                where: { id: product.id },
+                data: {
+                    stripeProductId,
+                    stripePriceId,
+                },
+            });
+            
             // Create the program with the productId already set
             const program = await tx.program.create({
                 data: {
@@ -68,11 +98,11 @@ export const programsRouter = createTRPCRouter({
                     maxClients: input.maxClients,
                     isActive: true,
                     coachId: coachProfile.id,
-                    productId: product.id,
+                    productId: updatedProduct.id,
                 },
             });
             
-            return { program, product };
+            return { program, product: updatedProduct };
         });
         
         return result;
@@ -87,7 +117,7 @@ export const programsRouter = createTRPCRouter({
     })).mutation(async ({ ctx, input }) => {
         const program = await db.program.findUnique({
             where: { id: input.id },
-            include: { coach: true },
+            include: { coach: true, product: true },
         });
         if (!program) {
             throw new TRPCError({ code: "NOT_FOUND", message: "Program not found" });
@@ -95,10 +125,58 @@ export const programsRouter = createTRPCRouter({
         if (program.coach.userId !== ctx.session.user.id) {
             throw new TRPCError({ code: "FORBIDDEN", message: "You can only update your own programs" });
         }
+        
+        // Update program
         const updatedProgram = await db.program.update({ 
             where: { id: input.id },
-            data: input,
+            data: {
+                name: input.name,
+                description: input.description,
+                price: input.price,
+                duration: input.duration,
+                maxClients: input.maxClients,
+            },
         });
+        
+        // Update associated product if name, description, or price changed
+        if (program.productId && program.product && (input.name !== undefined || input.description !== undefined || input.price !== undefined)) {
+            const productUpdateData: {
+                name?: string;
+                description?: string;
+                priceCents?: number;
+                stripeProductId?: string;
+                stripePriceId?: string;
+            } = {};
+            
+            if (input.name !== undefined) productUpdateData.name = input.name;
+            if (input.description !== undefined) productUpdateData.description = input.description;
+            if (input.price !== undefined) productUpdateData.priceCents = Math.round(input.price * 100);
+            
+            const finalName = input.name ?? program.name;
+            const finalDescription = input.description ?? program.description;
+            const finalPriceCents = input.price !== undefined ? Math.round(input.price * 100) : program.product.priceCents;
+            
+            // Sync with Stripe
+            const { stripeProductId, stripePriceId } = await syncProductToStripe(
+                program.product.id,
+                finalName,
+                finalDescription,
+                finalPriceCents,
+                program.product.currency,
+                program.product.type,
+                program.product.stripeProductId,
+                program.product.stripePriceId,
+            );
+            
+            productUpdateData.stripeProductId = stripeProductId;
+            productUpdateData.stripePriceId = stripePriceId;
+            
+            await db.product.update({
+                where: { id: program.product.id },
+                data: productUpdateData,
+            });
+        }
+        
         return updatedProgram;
     }),
     archiveProgram: coachProcedure.input(z.object({

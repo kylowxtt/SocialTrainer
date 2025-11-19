@@ -53,6 +53,9 @@ model User {
   accounts      Account[]
   sessions      Session[]
 
+  // Stripe customer ID for payments (both coaches and clients can be buyers)
+  stripeCustomerId String?
+
   // Coach-specific fields
   coachProfile CoachProfile?
 
@@ -64,28 +67,28 @@ model User {
 }
 
 model Lead {
-  id                  String         @id @default(cuid())
+  id                     String                @id @default(cuid())
   // Basic contact info submitted by the lead
-  name                String
-  email               String
-  phone               String?
+  name                   String
+  email                  String
+  phone                  String?
   // The coach this lead is interested in working with (required)
-  coachId             String
-  coach               CoachProfile   @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  coachId                String
+  coach                  CoachProfile          @relation(fields: [coachId], references: [id], onDelete: Cascade)
   // Raw intake form submission (JSON, structure set by CoachProfile.intakeFormSchema)
-  intakeSubmission    Json?
-  intakeSchemaId      String?
-  intakeSchemaVersion Int?
+  intakeSubmission       Json?
+  intakeSchemaId         String?
+  intakeSchemaVersion    Int?
   // Status of the lead through the funnel
-  status              LeadStatus     @default(PENDING)
+  status                 LeadStatus            @default(PENDING)
   // Conversion targets (optional) — enforce at most one lead per user/client
-  userId              String?        @unique
-  user                User?          @relation(name: "LeadToUser", fields: [userId], references: [id], onDelete: SetNull)
-  clientProfileId     String?        @unique
-  clientProfile       ClientProfile? @relation(name: "LeadToClientProfile", fields: [clientProfileId], references: [id], onDelete: SetNull)
-  orders              Order[]
-  coachingRelationshipId String? @unique
-  coachingRelationship CoachingRelationship? @relation("LeadToCoachingRelationship", fields: [coachingRelationshipId], references: [id], onDelete: SetNull)
+  userId                 String?               @unique
+  user                   User?                 @relation(name: "LeadToUser", fields: [userId], references: [id], onDelete: SetNull)
+  clientProfileId        String?               @unique
+  clientProfile          ClientProfile?        @relation(name: "LeadToClientProfile", fields: [clientProfileId], references: [id], onDelete: SetNull)
+  orders                 Order[]
+  coachingRelationshipId String?               @unique
+  coachingRelationship   CoachingRelationship? @relation("LeadToCoachingRelationship", fields: [coachingRelationshipId], references: [id], onDelete: SetNull)
 
   // Time tracking
   createdAt  DateTime  @default(now())
@@ -121,38 +124,45 @@ model CoachProfile {
   intakeFormSchemaVersion Int?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
-  
-  publicSlug  String? @unique
-  headline    String?
-  heroImage   String? // URL
-  programs Program[]
-  products Product[]
-  orders   Order[]
 
-  leads    Lead[]
+  publicSlug String? @unique
+  headline   String?
+  heroImage  String? // URL
+
+  // Stripe Connect account ID for payouts
+  stripeAccountId String?
+  // Default platform fee in basis points (e.g., 2000 = 20%)
+  platformFeeBps  Int     @default(2000)
+
+  programs      Program[]
+  products      Product[]
+  orders        Order[]
+  subscriptions CoachSubscription[]
+
+  leads                 Lead[]
   coachingRelationships CoachingRelationship[]
 }
 
 model ClientProfile {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   // Required basic contact info
-  name         String
-  email        String
+  name      String
+  email     String
   // Optional additional contact options
-  phone        String?
+  phone     String?
   // High-level goals
-  goals        String[] @default([]) // e.g., ["Lose weight", "Build muscle"]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  goals     String[] @default([]) // e.g., ["Lose weight", "Build muscle"]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   enrollments Enrollment[]
   orders      Order[]
 
   // Optional provenance — a client profile can originate from at most one lead
   originLead Lead? @relation(name: "LeadToClientProfile")
-  
+
   coachingRelationships CoachingRelationship[]
 }
 
@@ -223,11 +233,14 @@ model Product {
   isActive        Boolean      @default(true)
   stripeProductId String?
   stripePriceId   String?
+  // Optional per-product platform fee override (in basis points)
+  // Falls back to CoachProfile.platformFeeBps if null
+  platformFeeBps  Int?
   metadata        Json?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  orders Order[]
+  orders  Order[]
   program Program?
 
   @@index([coachId, isActive])
@@ -249,6 +262,13 @@ model Order {
   stripeCheckoutSessionId String?
   stripePaymentIntentId   String?
   stripeInvoiceId         String?
+  stripeSubscriptionId    String? // For recurring products
+  // Revenue split details
+  platformFeeCents        Int?
+  coachAmountCents        Int?
+  stripeTransferId        String?
+  // Whether this order is for a subscription
+  isSubscription          Boolean        @default(false)
   metadata                Json?
   fulfilledAt             DateTime?
   createdAt               DateTime       @default(now())
@@ -259,6 +279,7 @@ model Order {
   @@index([leadId])
   @@index([clientId])
   @@index([status])
+  @@index([stripeSubscriptionId])
 }
 
 enum CoachingRelationshipStatus {
@@ -269,20 +290,20 @@ enum CoachingRelationshipStatus {
 }
 
 model CoachingRelationship {
-  id                    String                        @id @default(cuid())
-  coachId               String
-  coach                 CoachProfile                  @relation(fields: [coachId], references: [id], onDelete: Cascade)
-  clientId              String
-  client                ClientProfile                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  status                CoachingRelationshipStatus    @default(ACTIVE)
+  id                  String                     @id @default(cuid())
+  coachId             String
+  coach               CoachProfile               @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  clientId            String
+  client              ClientProfile              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  status              CoachingRelationshipStatus @default(ACTIVE)
   // Intake form data from lead conversion
-  intakeSubmission      Json?
-  intakeSchemaId        String?
-  intakeSchemaVersion   Int?
-  startDate             DateTime                      @default(now())
-  endDate               DateTime?
-  createdAt             DateTime                      @default(now())
-  updatedAt             DateTime                      @updatedAt
+  intakeSubmission    Json?
+  intakeSchemaId      String?
+  intakeSchemaVersion Int?
+  startDate           DateTime                   @default(now())
+  endDate             DateTime?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
 
   // Optional link back to the lead that created this relationship
   originLead Lead? @relation("LeadToCoachingRelationship")
@@ -298,4 +319,47 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+enum CoachSubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  TRIALING
+}
+
+model CoachPlan {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  stripePriceId String // Stripe recurring price ID
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subscriptions CoachSubscription[]
+
+  @@index([isActive])
+}
+
+model CoachSubscription {
+  id                   String                  @id @default(cuid())
+  coachId              String
+  coach                CoachProfile            @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  planId               String
+  plan                 CoachPlan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  stripeCustomerId     String
+  stripeSubscriptionId String
+  status               CoachSubscriptionStatus @default(INCOMPLETE)
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  @@unique([coachId])
+  @@unique([stripeSubscriptionId])
+  @@index([coachId])
+  @@index([status])
 }
