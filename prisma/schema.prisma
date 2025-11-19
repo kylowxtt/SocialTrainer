@@ -170,6 +170,8 @@ model Program {
   updatedAt   DateTime     @updatedAt
 
   enrollments Enrollment[]
+  productId   String?      @unique
+  product     Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([coachId])
 }
@@ -226,6 +228,7 @@ model Product {
   updatedAt       DateTime     @updatedAt
 
   orders Order[]
+  program Program?
 
   @@index([coachId, isActive])
 }
