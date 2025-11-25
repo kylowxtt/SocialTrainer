@@ -7,7 +7,7 @@ SocialTrainer is a comprehensive coaching platform built specifically for social
 ## 🚀 Features
 
 ### For Coaches
-- **Program Management**: Create and manage unlimited coaching programs with custom pricing, duration, and capacity limits
+- **Program Management**: Create and manage unlimited coaching programs with custom pricing and capacity limits
 - **Client Dashboard**: Track all your clients in one organized dashboard with real-time progress insights
 - **Workout Builder**: Create custom workout templates with exercises, sets, reps, and notes
 - **Automated Workflows**: Handle enrollments, notifications, and scheduling automatically

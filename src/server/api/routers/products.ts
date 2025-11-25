@@ -5,6 +5,8 @@ import { db } from "../../db";
 import { z } from "zod";
 import type { Prisma, ProductType } from "../../../../generated/prisma";
 import { TRPCError } from "@trpc/server";
+import { sessionService } from "../../services/session-service";
+import { sessionConfigurationsSchema } from "../schemas/session-configuration";
 
 export const productsRouter = createTRPCRouter({
     getProducts: coachProcedure.query(async ({ ctx }) => {
@@ -50,6 +52,8 @@ export const productsRouter = createTRPCRouter({
         price: z.number(),
         currency: z.string(),
         type: z.enum(["ONE_OFF", "RECURRING"]),
+        // Array of session configurations (one-off or recurring)
+        sessions: sessionConfigurationsSchema,
     })).mutation(async ({ ctx, input }) => {
         // Get coach profile to verify ownership
         const coachProfile = await db.coachProfile.findUnique({
@@ -58,17 +62,41 @@ export const productsRouter = createTRPCRouter({
         if (!coachProfile) {
             throw new TRPCError({ code: "NOT_FOUND", message: "Coach profile not found" });
         }
-        const product = await db.product.create({
-            data: {
-                coachId: coachProfile.id,
-                name: input.name,
-                description: input.description,
-                priceCents: input.price,
-                currency: input.currency,
-                type: input.type as ProductType,
-            },
+        
+        // Use a transaction to ensure atomicity: if session creation fails,
+        // the product creation will be rolled back
+        const result = await db.$transaction(async (tx) => {
+            const product = await tx.product.create({
+                data: {
+                    coachId: coachProfile.id,
+                    name: input.name,
+                    description: input.description,
+                    priceCents: Math.round(input.price * 100), // Convert to cents
+                    currency: input.currency,
+                    type: input.type as ProductType,
+                },
+            });
+            
+            // Create sessions if provided - pass transaction client to ensure atomicity
+            let sessionResults = null;
+            if (input.sessions && input.sessions.length > 0) {
+                sessionResults = await sessionService.createSessionsFromConfigurations(
+                    input.sessions.map(s => ({
+                        ...s,
+                        recurrence: s.recurrence,
+                    })),
+                    {
+                        coachId: coachProfile.id,
+                        productId: product.id,
+                    },
+                    tx
+                );
+            }
+            
+            return { product, sessions: sessionResults };
         });
-        return product;
+        
+        return { ...result.product, sessions: result.sessions };
     }),
     updateProduct: coachProcedure.input(z.object({
         id: z.string(),

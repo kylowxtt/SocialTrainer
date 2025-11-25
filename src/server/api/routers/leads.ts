@@ -5,7 +5,7 @@ import { db } from "../../db";
 import { z } from "zod";
 import type { Prisma } from "../../../../generated/prisma";
 import { TRPCError } from "@trpc/server";
-
+import { LeadStatus } from "../../../../generated/prisma";
 export const leadsRouter = createTRPCRouter({
 	// Core contact info is captured as explicit columns on Lead.
 	// Additional coach-defined intake answers are stored as JSON custom fields.
@@ -76,7 +76,7 @@ export const leadsRouter = createTRPCRouter({
         return lead;
     }),
 
-    deleteLead: coachProcedure.input(z.object({
+    rejectLead: coachProcedure.input(z.object({
         id: z.string(),
 	})).mutation(async ({ ctx, input }) => {
         const lead = await db.lead.findUnique({
@@ -88,12 +88,13 @@ export const leadsRouter = createTRPCRouter({
         }
         // Verify ownership
         if (lead.coach.userId !== ctx.session.user.id) {
-            throw new TRPCError({ code: "FORBIDDEN", message: "You can only delete your own leads" });
+            throw new TRPCError({ code: "FORBIDDEN", message: "You can only reject your own leads" });
         }
-        const deletedLead = await db.lead.delete({
+        const rejectedLead = await db.lead.update({
             where: { id: input.id },
+            data: { status: LeadStatus.REJECTED },
         });
-        return deletedLead;
+        return rejectedLead;
     }),
     updateLeadStatus: coachProcedure.input(z.object({
         id: z.string(),

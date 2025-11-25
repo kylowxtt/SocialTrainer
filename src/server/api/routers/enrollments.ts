@@ -9,8 +9,14 @@ import { TRPCError } from "@trpc/server";
 export const enrollmentsRouter = createTRPCRouter({
     // Coach: Get all enrollments for their programs
     getEnrollments: coachProcedure.query(async ({ ctx }) => {
+        const coachProfile = await db.coachProfile.findUnique({
+            where: { userId: ctx.session.user.id },
+        });
+        if (!coachProfile) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Coach profile not found" });
+        }
         const enrollments = await db.enrollment.findMany({
-            where: { program: { coachId: ctx.session.user.id } },
+            where: { cohort: { program: { coachId: coachProfile.id } } },
         });
         return enrollments;
     }),
@@ -45,17 +51,31 @@ export const enrollmentsRouter = createTRPCRouter({
         const enrollments = await db.enrollment.findMany({
             where: { clientId: input.clientId },
             include: {
-                program: true,
+                cohort: {
+                    include: {
+                        program: true,
+                    },
+                },
             },
         });
         return enrollments;
     }),
     // Coach: Get all enrollments for their programs with full details
     getEnrollmentsForCoach: coachProcedure.query(async ({ ctx }) => {
+        const coachProfile = await db.coachProfile.findUnique({
+            where: { userId: ctx.session.user.id },
+        });
+        if (!coachProfile) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Coach profile not found" });
+        }
         const enrollments = await db.enrollment.findMany({
-            where: { program: { coachId: ctx.session.user.id } },
+            where: { cohort: { program: { coachId: coachProfile.id } } },
             include: {
-                program: true,
+                cohort: {
+                    include: {
+                        program: true,
+                    },
+                },
                 client: true,
             },
         });

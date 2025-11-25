@@ -5,6 +5,8 @@ import { db } from "../../db";
 import { z } from "zod";
 import type { Prisma } from "../../../../generated/prisma";
 import { TRPCError } from "@trpc/server";
+import { sessionService } from "../../services/session-service";
+import { sessionConfigurationsSchema } from "../schemas/session-configuration";
 
 export const coachingRelationshipsRouter = createTRPCRouter({
     // Coach: Create a new 1:1 coaching relationship (from lead or directly)
@@ -14,6 +16,8 @@ export const coachingRelationshipsRouter = createTRPCRouter({
         intakeSchemaId: z.string().optional(),
         intakeSchemaVersion: z.number().int().positive().optional(),
         leadId: z.string().optional(), // Optional link to originating lead
+        // Array of session configurations (one-off or recurring)
+        sessions: sessionConfigurationsSchema,
     })).mutation(async ({ ctx, input }) => {
         // Get coach profile
         const coachProfile = await db.coachProfile.findUnique({
@@ -54,28 +58,52 @@ export const coachingRelationshipsRouter = createTRPCRouter({
             }
         }
 
-        const coachingRelationship = await db.coachingRelationship.create({
-            data: {
-                coachId: coachProfile.id,
-                clientId: input.clientId,
-                intakeSubmission: input.intakeSubmission as Prisma.InputJsonValue ?? null,
-                intakeSchemaId: input.intakeSchemaId ?? null,
-                intakeSchemaVersion: input.intakeSchemaVersion ?? null,
-            },
-        });
-
-        // Link lead to coaching relationship if provided
-        if (input.leadId) {
-            await db.lead.update({
-                where: { id: input.leadId },
+        // Use a transaction to ensure atomicity: if session creation or lead update fails,
+        // the coaching relationship creation will be rolled back
+        const result = await db.$transaction(async (tx) => {
+            const coachingRelationship = await tx.coachingRelationship.create({
                 data: {
-                    coachingRelationshipId: coachingRelationship.id,
-                    status: "CONVERTED",
+                    coachId: coachProfile.id,
+                    clientId: input.clientId,
+                    intakeSubmission: input.intakeSubmission as Prisma.InputJsonValue ?? null,
+                    intakeSchemaId: input.intakeSchemaId ?? null,
+                    intakeSchemaVersion: input.intakeSchemaVersion ?? null,
                 },
             });
-        }
 
-        return coachingRelationship;
+            // Link lead to coaching relationship if provided
+            if (input.leadId) {
+                await tx.lead.update({
+                    where: { id: input.leadId },
+                    data: {
+                        coachingRelationshipId: coachingRelationship.id,
+                        status: "CONVERTED",
+                    },
+                });
+            }
+
+            // Create sessions if provided - pass transaction client to ensure atomicity
+            let sessionResults = null;
+            if (input.sessions && input.sessions.length > 0) {
+                sessionResults = await sessionService.createSessionsFromConfigurations(
+                    input.sessions.map(s => ({
+                        ...s,
+                        recurrence: s.recurrence,
+                    })),
+                    {
+                        coachId: coachProfile.id,
+                        coachingRelationshipId: coachingRelationship.id,
+                        clientProfileId: input.clientId,
+                        leadId: input.leadId,
+                    },
+                    tx
+                );
+            }
+
+            return { coachingRelationship, sessions: sessionResults };
+        });
+
+        return { ...result.coachingRelationship, sessions: result.sessions };
     }),
 
     // Coach: Get all their 1:1 coaching relationships

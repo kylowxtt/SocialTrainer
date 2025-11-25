@@ -64,34 +64,36 @@ model User {
 }
 
 model Lead {
-  id                  String         @id @default(cuid())
+  id                     String                @id @default(cuid())
   // Basic contact info submitted by the lead
-  name                String
-  email               String
-  phone               String?
+  name                   String
+  email                  String
+  phone                  String?
   // The coach this lead is interested in working with (required)
-  coachId             String
-  coach               CoachProfile   @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  coachId                String
+  coach                  CoachProfile          @relation(fields: [coachId], references: [id], onDelete: Cascade)
   // Raw intake form submission (JSON, structure set by CoachProfile.intakeFormSchema)
-  intakeSubmission    Json?
-  intakeSchemaId      String?
-  intakeSchemaVersion Int?
+  intakeSubmission       Json?
+  intakeSchemaId         String?
+  intakeSchemaVersion    Int?
   // Status of the lead through the funnel
-  status              LeadStatus     @default(PENDING)
+  status                 LeadStatus            @default(PENDING)
   // Conversion targets (optional) — enforce at most one lead per user/client
-  userId              String?        @unique
-  user                User?          @relation(name: "LeadToUser", fields: [userId], references: [id], onDelete: SetNull)
-  clientProfileId     String?        @unique
-  clientProfile       ClientProfile? @relation(name: "LeadToClientProfile", fields: [clientProfileId], references: [id], onDelete: SetNull)
-  orders              Order[]
-  coachingRelationshipId String? @unique
-  coachingRelationship CoachingRelationship? @relation("LeadToCoachingRelationship", fields: [coachingRelationshipId], references: [id], onDelete: SetNull)
+  userId                 String?               @unique
+  user                   User?                 @relation(name: "LeadToUser", fields: [userId], references: [id], onDelete: SetNull)
+  clientProfileId        String?               @unique
+  clientProfile          ClientProfile?        @relation(name: "LeadToClientProfile", fields: [clientProfileId], references: [id], onDelete: SetNull)
+  orders                 Order[]
+  coachingRelationshipId String?               @unique
+  coachingRelationship   CoachingRelationship? @relation("LeadToCoachingRelationship", fields: [coachingRelationshipId], references: [id], onDelete: SetNull)
 
   // Time tracking
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  reviewedAt DateTime?
-  acceptedAt DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  reviewedAt          DateTime?
+  acceptedAt          DateTime?
+  schedulingSessions  SchedulingSession[]
+  sessionParticipants SessionParticipant[]
 }
 
 enum LeadStatus {
@@ -121,39 +123,68 @@ model CoachProfile {
   intakeFormSchemaVersion Int?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
-  
-  publicSlug  String? @unique
-  headline    String?
-  heroImage   String? // URL
-  programs Program[]
-  products Product[]
-  orders   Order[]
 
-  leads    Lead[]
+  publicSlug       String?            @unique
+  headline         String?
+  profileImage     String? // URL
+  programs         Program[]
+  products         Product[]
+  orders           Order[]
+  cohorts          Cohort[]
+  recurrenceSeries RecurrenceSeries[]
+
+  leads                 Lead[]
   coachingRelationships CoachingRelationship[]
+  schedulingSessions    SchedulingSession[]
+  linkInBio             LinkInBio?
+}
+
+model LinkInBio {
+  id             String       @id @default(cuid())
+  coachProfileId String       @unique
+  coachProfile   CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
+  // Links stored as JSON array of { title, url, icon?, order? }
+  links          Json? // Array of link objects
+  // Optional custom slug/URL for the link-in-bio page
+  slug           String?      @unique
+  // Optional page title/headline
+  title          String?
+  // Optional description/bio for the link-in-bio page
+  description    String?
+  // Hero image for the link-in-bio page
+  heroImage      String? // URL
+  // Theme colors
+  primaryColor   String? // Hex color code
+  secondaryColor String? // Hex color code
+  // Publication status
+  isPublished    Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }
 
 model ClientProfile {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   // Required basic contact info
-  name         String
-  email        String
+  name      String
+  email     String
   // Optional additional contact options
-  phone        String?
+  phone     String?
   // High-level goals
-  goals        String[] @default([]) // e.g., ["Lose weight", "Build muscle"]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  goals     String[] @default([]) // e.g., ["Lose weight", "Build muscle"]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   enrollments Enrollment[]
   orders      Order[]
 
   // Optional provenance — a client profile can originate from at most one lead
   originLead Lead? @relation(name: "LeadToClientProfile")
-  
+
   coachingRelationships CoachingRelationship[]
+  schedulingSessions    SchedulingSession[]
+  sessionParticipants   SessionParticipant[]
 }
 
 model Program {
@@ -163,33 +194,107 @@ model Program {
   coachId     String
   coach       CoachProfile @relation(fields: [coachId], references: [id], onDelete: Cascade)
   price       Float // Monthly price
-  duration    Int // Duration in weeks
   maxClients  Int? // Maximum cohort size
   isActive    Boolean      @default(true)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  enrollments Enrollment[]
-  productId   String?      @unique
-  product     Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productId           String?              @unique
+  product             Product?             @relation(fields: [productId], references: [id], onDelete: SetNull)
+  schedulingSessions  SchedulingSession[]
+  sessionParticipants SessionParticipant[]
+  cohorts             Cohort[]
+  recurrenceSeries    RecurrenceSeries[]
+  blueprint           Blueprint?
 
   @@index([coachId])
 }
 
-model Enrollment {
-  id        String           @id @default(cuid())
-  clientId  String
-  client    ClientProfile    @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  programId String
-  program   Program          @relation(fields: [programId], references: [id], onDelete: Cascade)
-  status    EnrollmentStatus @default(ACTIVE)
-  startDate DateTime         @default(now())
-  endDate   DateTime?
-  createdAt DateTime         @default(now())
+model Blueprint {
+  id        String   @id @default(cuid())
+  programId String   @unique
+  program   Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  weeks     Week[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@unique([clientId, programId])
-  @@index([clientId])
   @@index([programId])
+}
+
+model Week {
+  id          String    @id @default(cuid())
+  blueprintId String
+  blueprint   Blueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  notes       String?
+  order       Int
+  metadata    Json?
+  isActive    Boolean   @default(true)
+  days        Day[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([blueprintId])
+  @@index([blueprintId, order])
+  @@index([blueprintId, isActive])
+}
+
+model Day {
+  id          String    @id @default(cuid())
+  weekId      String
+  week        Week      @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  notes       String?
+  order       Int
+  isRestDay   Boolean   @default(false)
+  metadata    Json?
+  isActive    Boolean   @default(true)
+  workouts    Workout[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([weekId])
+  @@index([weekId, order])
+  @@index([weekId, isActive])
+}
+
+model Workout {
+  id           String   @id @default(cuid())
+  dayId        String
+  day          Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  exerciseName String
+  reps         String
+  sets         Int
+  rir          Int?
+  rpe          Float?
+  order        Int
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([dayId])
+  @@index([dayId, order])
+  @@index([dayId, isActive])
+}
+
+model Enrollment {
+  id                  String               @id @default(cuid())
+  clientId            String
+  client              ClientProfile        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  status              EnrollmentStatus     @default(ACTIVE)
+  startDate           DateTime             @default(now())
+  endDate             DateTime?
+  createdAt           DateTime             @default(now())
+  cohortId            String
+  cohort              Cohort               @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  schedulingSessions  SchedulingSession[]
+  sessionParticipants SessionParticipant[]
+
+  @@unique([clientId, cohortId])
+  @@index([clientId])
+  @@index([cohortId])
 }
 
 enum EnrollmentStatus {
@@ -227,32 +332,35 @@ model Product {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  orders Order[]
-  program Program?
+  orders             Order[]
+  program            Program?
+  schedulingSessions SchedulingSession[]
+  recurrenceSeries   RecurrenceSeries[]
 
   @@index([coachId, isActive])
 }
 
 model Order {
-  id                      String         @id @default(cuid())
+  id                      String              @id @default(cuid())
   coachId                 String
-  coach                   CoachProfile   @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  coach                   CoachProfile        @relation(fields: [coachId], references: [id], onDelete: Cascade)
   productId               String
-  product                 Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product                 Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
   leadId                  String?
-  lead                    Lead?          @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead                    Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
   clientId                String?
-  client                  ClientProfile? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  client                  ClientProfile?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
   amountCents             Int
   currency                String
-  status                  OrderStatus    @default(INITIATED)
+  status                  OrderStatus         @default(INITIATED)
   stripeCheckoutSessionId String?
   stripePaymentIntentId   String?
   stripeInvoiceId         String?
   metadata                Json?
   fulfilledAt             DateTime?
-  createdAt               DateTime       @default(now())
-  updatedAt               DateTime       @updatedAt
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  schedulingSessions      SchedulingSession[]
 
   @@index([coachId])
   @@index([productId])
@@ -269,23 +377,26 @@ enum CoachingRelationshipStatus {
 }
 
 model CoachingRelationship {
-  id                    String                        @id @default(cuid())
-  coachId               String
-  coach                 CoachProfile                  @relation(fields: [coachId], references: [id], onDelete: Cascade)
-  clientId              String
-  client                ClientProfile                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  status                CoachingRelationshipStatus    @default(ACTIVE)
+  id                  String                     @id @default(cuid())
+  coachId             String
+  coach               CoachProfile               @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  clientId            String
+  client              ClientProfile              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  status              CoachingRelationshipStatus @default(ACTIVE)
   // Intake form data from lead conversion
-  intakeSubmission      Json?
-  intakeSchemaId        String?
-  intakeSchemaVersion   Int?
-  startDate             DateTime                      @default(now())
-  endDate               DateTime?
-  createdAt             DateTime                      @default(now())
-  updatedAt             DateTime                      @updatedAt
+  intakeSubmission    Json?
+  intakeSchemaId      String?
+  intakeSchemaVersion Int?
+  startDate           DateTime                   @default(now())
+  endDate             DateTime?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
 
   // Optional link back to the lead that created this relationship
-  originLead Lead? @relation("LeadToCoachingRelationship")
+  originLead          Lead?                @relation("LeadToCoachingRelationship")
+  schedulingSessions  SchedulingSession[]
+  sessionParticipants SessionParticipant[]
+  recurrenceSeries    RecurrenceSeries[]
 
   @@unique([coachId, clientId])
   @@index([coachId])
@@ -298,4 +409,179 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+/// SchedulingSession represents onboarding calls, consults, or cohort events
+/// and maps to the `sessions` table to avoid clashing with NextAuth auth sessions.
+model SchedulingSession {
+  id                  String        @id @default(cuid())
+  coachId             String
+  coach               CoachProfile  @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  title               String
+  description         String?
+  type                SessionType   @default(OTHER)
+  status              SessionStatus @default(SCHEDULED)
+  startsAt            DateTime
+  endsAt              DateTime?
+  timeZone            String?
+  location            String?
+  videoConferenceLink String?
+  metadata            Json?
+  coachNotes          String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  programId              String?
+  program                Program?              @relation(fields: [programId], references: [id], onDelete: SetNull)
+  productId              String?
+  product                Product?              @relation(fields: [productId], references: [id], onDelete: SetNull)
+  orderId                String?
+  order                  Order?                @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  leadId                 String?
+  lead                   Lead?                 @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  clientProfileId        String?
+  clientProfile          ClientProfile?        @relation(fields: [clientProfileId], references: [id], onDelete: SetNull)
+  coachingRelationshipId String?
+  coachingRelationship   CoachingRelationship? @relation(fields: [coachingRelationshipId], references: [id], onDelete: SetNull)
+  enrollmentId           String?
+  enrollment             Enrollment?           @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  recurrenceSeriesId     String?
+  recurrenceSeries       RecurrenceSeries?     @relation(fields: [recurrenceSeriesId], references: [id], onDelete: Cascade)
+
+  participants SessionParticipant[]
+
+  @@index([coachId, startsAt])
+  @@index([programId])
+  @@index([leadId])
+  @@index([clientProfileId])
+  @@index([status])
+  @@index([recurrenceSeriesId])
+  @@map("sessions")
+}
+
+model SessionParticipant {
+  id                     String                 @id @default(cuid())
+  sessionId              String
+  session                SchedulingSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  participantType        SessionParticipantType
+  leadId                 String?
+  lead                   Lead?                  @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  clientProfileId        String?
+  clientProfile          ClientProfile?         @relation(fields: [clientProfileId], references: [id], onDelete: SetNull)
+  programId              String?
+  program                Program?               @relation(fields: [programId], references: [id], onDelete: SetNull)
+  enrollmentId           String?
+  enrollment             Enrollment?            @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  coachingRelationshipId String?
+  coachingRelationship   CoachingRelationship?  @relation(fields: [coachingRelationshipId], references: [id], onDelete: SetNull)
+  externalName           String?
+  externalEmail          String?
+  metadata               Json?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  @@index([sessionId])
+  @@index([leadId])
+  @@index([clientProfileId])
+  @@index([programId])
+  @@index([participantType])
+}
+
+enum SessionType {
+  ONBOARDING_CALL
+  PHONE_CONSULT
+  COHORT_EVENT
+  CHECK_IN
+  OTHER
+}
+
+enum SessionStatus {
+  DRAFT
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELED
+}
+
+enum SessionParticipantType {
+  LEAD
+  CLIENT
+  PROGRAM
+  ENROLLMENT
+  COACHING_RELATIONSHIP
+  EXTERNAL
+}
+
+enum CohortStatus {
+  DRAFT
+  ENROLLING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum RecurrenceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+/// Cohorts execute a concrete intake of a Program blueprint for a date-bounded group.
+/// TODO: When cohort APIs are added, wire them to recurrence series + enrollments orchestration.
+model Cohort {
+  id             String       @id @default(cuid())
+  programId      String
+  program        Program      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  coachId        String
+  coach          CoachProfile @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  name           String
+  slug           String       @unique
+  description    String?
+  intakeOpensAt  DateTime?
+  intakeClosesAt DateTime?
+  startsAt       DateTime?
+  endsAt         DateTime?
+  status         CohortStatus @default(DRAFT)
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  enrollments      Enrollment[]
+  recurrenceSeries RecurrenceSeries[]
+
+  @@index([programId])
+  @@index([coachId])
+}
+
+/// RecurrenceSeries acts as a reusable schedule definition that can spawn sessions.
+/// TODO: Service layer should materialize SchedulingSession instances from these rules.
+model RecurrenceSeries {
+  id                     String                @id @default(cuid())
+  coachId                String
+  coach                  CoachProfile          @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  programId              String?
+  program                Program?              @relation(fields: [programId], references: [id], onDelete: SetNull)
+  cohortId               String?
+  cohort                 Cohort?               @relation(fields: [cohortId], references: [id], onDelete: SetNull)
+  coachingRelationshipId String?
+  coachingRelationship   CoachingRelationship? @relation(fields: [coachingRelationshipId], references: [id], onDelete: SetNull)
+  productId              String?
+  product                Product?              @relation(fields: [productId], references: [id], onDelete: SetNull)
+  title                  String
+  description            String?
+  timeZone               String
+  startsAt               DateTime
+  rruleString            String                @db.Text
+  metadata               Json?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  schedulingSessions SchedulingSession[]
+
+  @@index([coachId])
+  @@index([programId])
+  @@index([cohortId])
+  @@index([coachingRelationshipId])
+  @@index([productId])
 }
