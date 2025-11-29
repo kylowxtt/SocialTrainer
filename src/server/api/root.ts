@@ -7,6 +7,8 @@ import { enrollmentsRouter } from "./routers/enrollments";
 import { coachingRelationshipsRouter } from "./routers/coaching-relationships";
 import { sessionsRouter } from "./routers/sessions";
 import { recurrenceSeriesRouter } from "./routers/recurrence-series";
+import { checkInsRouter } from "./routers/checkins";
+import { habitsRouter } from "./routers/habits";
 
 /**
  * This is the primary router for your server.
@@ -22,6 +24,8 @@ export const appRouter = createTRPCRouter({
   coachingRelationships: coachingRelationshipsRouter,
   sessions: sessionsRouter,
   recurrenceSeries: recurrenceSeriesRouter,
+  checkIns: checkInsRouter,
+  habits: habitsRouter,
 });
 
 // export type definition of API

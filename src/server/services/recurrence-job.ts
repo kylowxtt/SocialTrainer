@@ -1,11 +1,13 @@
 import { db } from "../db";
 import { sessionService } from "./session-service";
+import { checkInService } from "./checkins";
 
 /**
  * Configuration for materialization buffer
  * Default: materialize sessions 60 days in advance
  */
 const MATERIALIZATION_BUFFER_DAYS = 60;
+const CHECK_IN_BUFFER_DAYS = 21;
 
 /**
  * Materialize all active recurrence series up to the buffer period
@@ -93,8 +95,54 @@ export async function materializeSeriesUpToBuffer(
     };
 }
 
+/**
+ * Materialize upcoming check-in instances for all active templates.
+ */
+export async function materializeActiveCheckIns(
+    bufferDays: number = CHECK_IN_BUFFER_DAYS
+) {
+    const bufferDate = new Date();
+    bufferDate.setDate(bufferDate.getDate() + bufferDays);
+
+    const templates = await db.checkInTemplate.findMany({
+        where: {
+            isActive: true,
+        },
+        select: { id: true },
+    });
+
+    const templateResults = [];
+    for (const template of templates) {
+        try {
+            const result = await checkInService.materializeTemplateInstances({
+                templateId: template.id,
+                upToDate: bufferDate,
+            });
+            templateResults.push({
+                templateId: template.id,
+                created: result.created,
+            });
+        } catch (error) {
+            templateResults.push({
+                templateId: template.id,
+                created: 0,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
+
+    const statusSweep = await checkInService.sweepInstanceStatuses();
+
+    return {
+        processed: templates.length,
+        statusSweep,
+        templateResults,
+    };
+}
+
 export const recurrenceJobService = {
     materializeAllActiveSeries,
     materializeSeriesUpToBuffer,
+    materializeActiveCheckIns,
 };
 

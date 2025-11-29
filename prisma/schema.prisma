@@ -136,6 +136,11 @@ model CoachProfile {
   leads                 Lead[]
   coachingRelationships CoachingRelationship[]
   schedulingSessions    SchedulingSession[]
+  checkInInstances      CheckInInstance[]
+  checkInSubmissions    CheckInSubmission[]
+  checkInReviews        CheckInReview[]
+  checkInTemplates      CheckInTemplate[]
+  habitDefinitions      HabitDefinition[]
   linkInBio             LinkInBio?
 }
 
@@ -185,6 +190,10 @@ model ClientProfile {
   coachingRelationships CoachingRelationship[]
   schedulingSessions    SchedulingSession[]
   sessionParticipants   SessionParticipant[]
+  habitLogs             HabitLog[]
+  checkInInstances      CheckInInstance[]
+  checkInSubmissions    CheckInSubmission[]
+  habitDefinitions      HabitDefinition[]
 }
 
 model Program {
@@ -206,6 +215,9 @@ model Program {
   cohorts             Cohort[]
   recurrenceSeries    RecurrenceSeries[]
   blueprint           Blueprint?
+  checkInTemplates    CheckInTemplate[]
+  checkInInstances    CheckInInstance[]
+  habitDefinitions    HabitDefinition[]
 
   @@index([coachId])
 }
@@ -291,6 +303,7 @@ model Enrollment {
   cohort              Cohort               @relation(fields: [cohortId], references: [id], onDelete: Cascade)
   schedulingSessions  SchedulingSession[]
   sessionParticipants SessionParticipant[]
+  checkInInstances    CheckInInstance[]
 
   @@unique([clientId, cohortId])
   @@index([clientId])
@@ -397,6 +410,9 @@ model CoachingRelationship {
   schedulingSessions  SchedulingSession[]
   sessionParticipants SessionParticipant[]
   recurrenceSeries    RecurrenceSeries[]
+  checkInTemplates    CheckInTemplate[]
+  checkInInstances    CheckInInstance[]
+  habitDefinitions    HabitDefinition[]
 
   @@unique([coachId, clientId])
   @@index([coachId])
@@ -527,6 +543,55 @@ enum RecurrenceFrequency {
   YEARLY
 }
 
+enum CheckInCadenceType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum CheckInInstanceStatus {
+  SCHEDULED
+  DUE
+  COMPLETED
+  SKIPPED
+  OVERDUE
+}
+
+enum CheckInSubmissionStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  CHANGES_REQUESTED
+}
+
+enum CheckInEntryType {
+  PROGRAM
+  ONE_ON_ONE
+  ADHOC
+}
+
+enum CheckInReviewStatus {
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+}
+
+enum HabitDataType {
+  BOOLEAN
+  NUMBER
+  TEXT
+  JSON
+}
+
+enum HabitLogStatus {
+  PENDING
+  COMPLETED
+  MISSED
+  SKIPPED
+}
+
 /// Cohorts execute a concrete intake of a Program blueprint for a date-bounded group.
 /// TODO: When cohort APIs are added, wire them to recurrence series + enrollments orchestration.
 model Cohort {
@@ -584,4 +649,168 @@ model RecurrenceSeries {
   @@index([cohortId])
   @@index([coachingRelationshipId])
   @@index([productId])
+}
+
+model CheckInTemplate {
+  id                     String                @id @default(cuid())
+  coachId                String
+  coach                  CoachProfile          @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  programId              String?
+  program                Program?              @relation(fields: [programId], references: [id], onDelete: SetNull)
+  coachingRelationshipId String?
+  coachingRelationship   CoachingRelationship? @relation(fields: [coachingRelationshipId], references: [id], onDelete: SetNull)
+  name                   String
+  description            String?
+  entryType              CheckInEntryType      @default(PROGRAM)
+  schemaVersion          Int                   @default(1)
+  formSchema             Json
+  cadenceType            CheckInCadenceType
+  cadenceRule            Json?
+  cadenceRrule           String?               @db.Text
+  cadenceTimeZone        String?
+  referencedHabitIds     String[]              @default([])
+  defaultPriority        Boolean               @default(false)
+  isActive               Boolean               @default(true)
+  metadata               Json?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  instances   CheckInInstance[]
+  submissions CheckInSubmission[]
+
+  @@index([coachId])
+  @@index([programId])
+  @@index([coachingRelationshipId])
+  @@index([entryType])
+  @@index([isActive])
+}
+
+model CheckInInstance {
+  id                     String                @id @default(cuid())
+  templateId             String
+  template               CheckInTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  coachId                String
+  coach                  CoachProfile          @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  clientId               String
+  client                 ClientProfile         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  programId              String?
+  program                Program?              @relation(fields: [programId], references: [id], onDelete: SetNull)
+  coachingRelationshipId String?
+  coachingRelationship   CoachingRelationship? @relation(fields: [coachingRelationshipId], references: [id], onDelete: SetNull)
+  enrollmentId           String?
+  enrollment             Enrollment?           @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  dueDate                DateTime
+  openAt                 DateTime?
+  submittedAt            DateTime?
+  closedAt               DateTime?
+  status                 CheckInInstanceStatus @default(SCHEDULED)
+  metadata               Json?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  submissions CheckInSubmission[]
+
+  @@unique([templateId, clientId, dueDate])
+  @@index([coachId, dueDate])
+  @@index([clientId, status])
+  @@index([programId])
+  @@index([coachingRelationshipId])
+}
+
+model CheckInSubmission {
+  id            String                  @id @default(cuid())
+  templateId    String
+  template      CheckInTemplate         @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  instanceId    String?
+  instance      CheckInInstance?        @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+  coachId       String
+  coach         CoachProfile            @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  clientId      String
+  client        ClientProfile           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  entryType     CheckInEntryType
+  status        CheckInSubmissionStatus @default(DRAFT)
+  isPriority    Boolean                 @default(false)
+  schemaVersion Int                     @default(1)
+  payload       Json
+  submittedAt   DateTime?
+  reviewedAt    DateTime?
+  habitContext  Json?
+  metadata      Json?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  reviews CheckInReview[]
+
+  @@index([coachId, status])
+  @@index([clientId, status])
+  @@index([entryType])
+  @@index([isPriority])
+  @@index([status])
+}
+
+model CheckInReview {
+  id           String              @id @default(cuid())
+  submissionId String
+  submission   CheckInSubmission   @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewerId   String
+  reviewer     CoachProfile        @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+  status       CheckInReviewStatus @default(PENDING)
+  message      String?
+  replyPayload Json?
+  metadata     Json?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([reviewerId, status])
+  @@index([submissionId])
+}
+
+model HabitDefinition {
+  id                     String                @id @default(cuid())
+  coachId                String
+  coach                  CoachProfile          @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  programId              String?
+  program                Program?              @relation(fields: [programId], references: [id], onDelete: SetNull)
+  coachingRelationshipId String?
+  coachingRelationship   CoachingRelationship? @relation(fields: [coachingRelationshipId], references: [id], onDelete: SetNull)
+  clientId               String?
+  client                 ClientProfile?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  name                   String
+  description            String?
+  dataType               HabitDataType         @default(BOOLEAN)
+  targetNumber           Float?
+  unitLabel              String?
+  referencedTemplateIds  String[]              @default([])
+  metadata               Json?
+  isActive               Boolean               @default(true)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  logs HabitLog[]
+
+  @@index([coachId])
+  @@index([programId])
+  @@index([coachingRelationshipId])
+  @@index([clientId])
+  @@index([isActive])
+}
+
+model HabitLog {
+  id        String         @id @default(cuid())
+  habitId   String
+  habit     HabitDefinition @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    ClientProfile   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  logDate   DateTime
+  status    HabitLogStatus  @default(PENDING)
+  value     Json?
+  notes     String?
+  metadata  Json?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([habitId, clientId, logDate])
+  @@index([clientId, logDate])
+  @@index([habitId, logDate])
+  @@index([status])
 }
